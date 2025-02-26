@@ -1,0 +1,681 @@
+---
+title: "Operations Research & Data Analytics - Final Project"
+author: "Joey Clancy"
+date: "12/2/2021"
+output:
+  html_document:
+    code_download: yes
+    toc: yes
+    toc_float: yes
+    number_sections: yes
+  word_document:
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+# Project Goal
+
+---
+
+# Data Brief & Project Notes
+
+## About the data
+
+## Addressing missing values
+
+---
+
+
+# Setup
+
+```{r clear-environment, echo = FALSE}
+# Clear environment of variables and functions
+rm(list = ls(all = TRUE)) 
+
+# Clear environmet of packages
+if(is.null(sessionInfo()$otherPkgs) == FALSE)lapply(paste("package:", names(sessionInfo()$otherPkgs), sep=""), detach, character.only = TRUE, unload = TRUE)
+
+```
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+# Import packages
+library(tidyverse)
+library(gridExtra)
+library(scales)
+library(caTools)
+#library(mice)
+library(data.table)
+#library(doParallel)
+library(kableExtra)
+library(stringr)
+library(fixest)
+library(modelsummary)
+library(lubridate)
+```
+
+# Data Preprocessing
+
+```{r warning=FALSE}
+# Load data
+covid <- read.csv("fullCOVIDtable.csv", sep = ";")
+covid <- covid[,-1]
+```
+
+## Original Data Set
+
+```{r}
+# Change position of some columns
+covid <- covid %>% relocate(CONTINENT, .after = X20FLIGHTS)
+covid <- covid %>% relocate(COUNTRY, .after = CONTINENT)
+covid <- covid %>% relocate(DATE, .after = COUNTRY)
+# Drop electrical information columns as they will not be used and are largely NA
+covid <- covid[,1:37]
+
+# Remove regional data
+covid <- covid[!grepl("-", covid$COUNTRY),]
+
+# Create df with factors for visualizations
+covidFact <- covid
+covidFact <- covidFact[!grepl("-", covidFact$COUNTRY),]
+
+# Convert vars to factor type
+cols <- c("COUNTRY", "CONTINENT", "SCHOOL", "WORK", "EVENTS", "GATHERINGS",
+          "TRANSPORTATION", "ATHOME", "NATIONAL", "INTERNATIONAL", "INFORMATION",
+          "TESTING", "TRACING")
+covidFact[cols] <- lapply(covid[cols], as.factor)
+
+# Convert date column to date type
+covid$DATE <- as.Date(covid$DATE)
+covidFact$DATE <- as.Date(covid$DATE)
+```
+
+## Imputing Missing Values
+
+```{r}
+# Deal with missing/infinite values
+covid <- covid %>% 
+    mutate_if(is.numeric, ~ replace(., is.infinite(.), NA))
+# Create 3 imputed data sets with mice package
+#covidImp <- mice(covid, m=3, maxit = 5, method = 'rf', seed = 777)    # Impute missing data using random forests
+```
+
+## New Completed Data Creation
+
+```{r}
+# Combines 3 imputed data sets for pooling. To be used in statistical EDA later on. 
+#completedData <- complete(covidImp, action = "long")
+```
+
+## Export Completed Data Set
+
+```{r}
+# Export completed data to csv in order to avoid repeating previous steps
+#write.csv(completedData, file = "covidImp.csv")
+```
+
+## Load Imputed Data
+
+```{r}
+# Import completed data
+completedData <- read.csv("covidImp.csv")
+# Get rid of row IDs
+completedData <- completedData[,c(-1, -4)]
+```
+
+## Wrangle New Data
+
+```{r}
+# Convert vars to factor type
+# cols <- c("COUNTRY", "CONTINENT", "SCHOOL", "WORK", "EVENTS", "GATHERINGS",
+#          "TRANSPORTATION", "ATHOME", "NATIONAL", "INTERNATIONAL", "INFORMATION",
+#          "TESTING", "TRACING")
+
+# completedData[cols] <- lapply(completedData[cols], as.factor)
+
+# Convert date column to date type
+completedData$DATE <- as.Date(completedData$DATE)
+
+# Get rid of regional data
+completedData <- completedData[!grepl("-", completedData$COUNTRY),]
+
+```
+
+
+# Univariate Non-Graphical
+
+```{r}
+# Summary of completed data
+summary(completedData)
+```
+
+```{r}
+# Structure of completed data
+str(completedData)
+```
+
+```{r}
+summary(covid)
+```
+
+
+# Univariate Graphical
+
+## Log Distribution Comparisons
+
+```{r}
+# The distributions are expected to be similar between the two data sets
+grid.arrange(
+    ggplot(data = completedData, mapping = aes(y = log(Cases))) +
+      geom_density() + 
+        theme_classic()+
+      coord_flip() +
+      labs(title = "Log Cases - Imputed Data Set"),
+    
+    ggplot(data = covid, mapping = aes(y = log(Cases))) +
+      geom_density() + 
+        theme_classic() +
+      coord_flip() +
+      labs(title = "Log Cases - Original Data Set")
+)
+```
+
+## SCHOOL
+
+```{r}
+completedData %>% 
+  ggplot(mapping = aes(x = SCHOOL)) +
+  geom_bar()
+```
+
+## WORK
+
+```{r}
+completedData %>% 
+  ggplot(mapping = aes(x = WORK)) +
+  geom_bar()
+```
+
+## EVENTS
+
+```{r}
+completedData %>% 
+  ggplot(mapping = aes(x = EVENTS)) +
+  geom_bar()
+```
+
+## GATHERINGS
+
+```{r}
+completedData %>% 
+  ggplot(mapping = aes(x = GATHERINGS)) +
+  geom_bar()
+```
+
+## TRANSPORTATION
+
+```{r}
+completedData %>% 
+  ggplot(mapping = aes(x = TRANSPORTATION)) +
+  geom_bar()
+```
+
+## ATHOME
+
+```{r}
+completedData %>% 
+  ggplot(mapping = aes(x = ATHOME)) +
+  geom_bar()
+```
+
+## NATIONAL
+
+```{r}
+completedData %>% 
+  ggplot(mapping = aes(x = NATIONAL)) +
+  geom_bar()
+```
+
+## INTERNATIONAL
+
+```{r}
+completedData %>% 
+  ggplot(mapping = aes(x = INTERNATIONAL)) +
+  geom_bar()
+```
+
+## INFORMATION
+
+```{r}
+completedData %>% 
+  ggplot(mapping = aes(x = INFORMATION)) +
+  geom_bar()
+```
+
+## TESTING
+
+```{r}
+completedData %>% 
+  ggplot(mapping = aes(x = TESTING)) +
+  geom_bar()
+```
+
+## TRACING
+
+```{r}
+completedData %>% 
+  ggplot(mapping = aes(x = TRACING)) +
+  geom_bar()
+```
+
+```{r}
+# Function to create density and box plot pair
+densityBox <- function(vbl) {
+  grid.arrange(
+    ggplot(data = completedData, mapping = aes(x = {{vbl}})) +
+      geom_density() + 
+        theme_classic(),
+    
+    ggplot(data = completedData, mapping = aes(x = 0)) +
+      geom_boxplot(mapping = aes(y = {{vbl}})) +
+        coord_flip() + 
+        theme_classic()
+  )
+}
+```
+
+## OLD
+
+```{r}
+densityBox(OLD)
+```
+
+## YOUNG
+
+```{r}
+densityBox(YOUNG)
+```
+
+## URBAN
+
+```{r}
+densityBox(URBAN)
+```
+
+## DENSITY
+
+```{r}
+densityBox(DENSITY)
+```
+
+## POPULATION
+
+```{r}
+densityBox(POPULATION)
+```
+
+## PHYSICIANS
+
+```{r}
+densityBox(PHYSICIANS)
+```
+
+## BEDS
+
+```{r}
+densityBox(BEDS)
+```
+
+## Cases
+
+```{r}
+densityBox(Cases)
+```
+
+## Deaths
+
+```{r}
+densityBox(Deaths)
+```
+
+## New.Cases
+
+```{r}
+densityBox(New.Cases)
+```
+
+## New.Deaths
+
+```{r}
+densityBox(New.Deaths)
+```
+
+## REFF
+
+```{r}
+densityBox(REFF)
+```
+
+## INFECTED
+
+```{r}
+densityBox(INFECTED)
+```
+
+## INFECTEDINCREASE
+
+```{r}
+densityBox(INFECTEDINCREASE)
+```
+
+## MORTALITY
+
+```{r}
+densityBox(MORTALITY)
+```
+
+## FATALITYINCREASE
+
+```{r}
+densityBox(FATALITYINCREASE)
+```
+
+## TEMPERATURE
+
+```{r}
+densityBox(TEMPERATURE)
+```
+
+## HUMIDITY
+
+```{r}
+densityBox(HUMIDITY)
+```
+
+## WIND
+
+```{r}
+densityBox(WIND)
+```
+
+## FLIGHTEVOLUTION
+
+```{r}
+densityBox(FLIGHTEVOLUTION)
+```
+
+## 19Flights
+
+```{r}
+densityBox(X19FLIGHTS)
+```
+
+## 20FLIGHTS
+
+```{r}
+densityBox(X20FLIGHTS)
+```
+
+# Multivariate Non-graphical
+
+```{r}
+# Get correlation matrix
+cormat <- cor(completedData[, unlist(lapply(completedData, is.numeric))])
+kable(cormat)
+```
+
+# Multivariate Graphical
+
+## Correlation Heat Map
+
+```{r}
+# Melt the previous correlation matrix
+melted_cormat <- melt(cormat)
+
+# Visualize the correlations in a heat map
+ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = "Correlation Heat Map")
+```
+
+## US vs. World - New Cases
+
+**Note**: The plot below shows the number of new cases in the US over the course of 2020, compared with the maximum number of new cases across all countries. This means that any point on the red line could have a different country associated with it. Put simply, the red line is made up of all countries that had the max number of new cases on any respective day of the year.
+
+```{r message=FALSE, warning=FALSE}
+# Using original data set
+covid %>% 
+  filter(New.Cases <= 800000) %>% # For some reason there was an 800000 outlier that appeared in the graph but not in the actual data, hence the filter
+  select(DATE, New.Cases, COUNTRY) %>% 
+  mutate(unitedStates = as.factor(ifelse(COUNTRY == "US", "US", "Other"))) %>% #changing 0,1 to no,yes
+  group_by(DATE, unitedStates) %>% 
+  summarize(globalMax = max(New.Cases)) %>% 
+  ggplot(mapping = aes(x = DATE, y = globalMax/1000, color = unitedStates)) + #using median price 
+  geom_line() +
+  theme_minimal() +
+  labs(title = "New US Cases vs. Max World New Cases (per day)",
+       subtitle = "Dramatic increase in new US-based cases starting in early Winter",
+       x = "Date",
+       y = "New Cases (thousands)") + 
+  gghighlight::gghighlight(max(globalMax) > 150000)
+```
+
+# Statistical EDA
+
+##### Notes
+
+- The following is an examination of the effect of all forms of policy on the effective reproduction number.
+
+- The effective reproduction number or Reff, is the average number of secondary infections caused by a single infected case, in a fully susceptible population.
+
+- The following three experiments look at the United States, China, and India.
+
+**There were some assumptions and/or flaws made while building these models:**
+
+1. All countries enact policies at the same time (obviously not true, but necessary in order to create control and treatment groups).
+
+2. The effects of the various levels within a policy category are negligible.
+
+3. Treatment consists of the enactment of policies across *all* categories at some level above zero.
+
+4. Policies stay active, so no policy reverts back to zero (inactive)
+
+## Difference in Differences Setup
+
+```{r}
+# Retrieve columns of interest
+colListDiD <- c("SCHOOL", "WORK", "EVENTS", "GATHERINGS",
+          "TRANSPORTATION", "ATHOME", "NATIONAL", "INTERNATIONAL", 
+          "INFORMATION", "TESTING", "TRACING", "Cases", "Deaths", "New.Cases",
+          "New.Deaths", "REFF", "INFECTED", "INFECTEDINCREASE", "MORTALITY", 
+          "FATALITYINCREASE", "COUNTRY", "DATE")
+# Create new data set from the completed set
+did <- covid[,colListDiD]
+
+
+# Create month column, use as time period measure
+did$DATE <- as.Date(did$DATE, format = "%Y-%m-%d")
+did[, "MONTH"] <- format(did[,"DATE"], "%m")
+
+# Create Day column
+#did[, "DAY"] <- format(did[,"DATE"], "%d")
+
+#did$DAY <- as.numeric(did$DAY)
+did$MONTH <- as.numeric(did$MONTH)
+
+did[, 1:20][is.na(did[, 1:20])] <- 0
+```
+
+```{r}
+did <- did %>% 
+  mutate(allPolicies = if_else(rowSums(did[,1:11] == 0) > 0, 0, 1))   
+# If a row had all policies implemented at some level, set allPolicies == 1
+# Likewise, if there were only some policies implemented, set allPolicies == 0
+```
+
+```{r}
+# Control group is made up of countries with the lowest totals (equal to zero) of the allPolicies variable
+controlGroupID <- did %>% 
+  filter(COUNTRY != "") %>% 
+  group_by(COUNTRY) %>% 
+  summarize(allPolicyCheck = sum(allPolicies))
+
+controlGroupID <- controlGroupID[order(controlGroupID$allPolicyCheck),]
+
+controlGroup <- controlGroupID[1:73, 1]
+
+# write.csv(controlGroup, file = "controlG.csv", row.names = FALSE)
+## Can then copy and paste country names below
+
+controlGroup <- c("Andorra","Angola","Anguilla","Antigua and Barbuda","Armenia","Aruba","Belarus","Belgium","Benin","Bonaire, Sint Eustatius and Saba",
+"Bosnia and Herzegovina","British Virgin Islands","Brunei","Bulgaria","Burma","Burundi","Cambodia","Cameroon","Canada","Cayman Islands",
+"Central African Republic","Channel Islands","Comoros","Curacao","Czechia","Dominica","Equatorial Guinea","Estonia","Falkland Islands (Malvinas)",
+"Finland","French Guiana","French Polynesia","Grenada","Guadeloupe","Iceland","Isle of Man","Japan","Korea, South","Latvia","Liechtenstein",
+"Malawi","Maldives","Mali","Martinique","Mauritania","Montenegro","Montserrat","Namibia","New Caledonia","Nicaragua","Niger","North Macedonia","Norway",
+"Saint Barthelemy","Saint Kitts and Nevis","Saint Lucia","Saint Pierre and Miquelon","Saint Vincent and the Grenadines","Sao Tome and Principe","Senegal",
+"Singapore","Sint Maarten","Somalia","St Martin","Switzerland","Taiwan*","Tajikistan","Tanzania","Turks and Caicos Islands","Venezuela","Western Sahara",
+"Yemen","Zambia","US","China","India")
+```
+
+```{r}
+did <- subset(did, COUNTRY %in% controlGroup)
+```
+
+### United States
+
+```{r}
+# Creates treatment and control groups
+did <- did %>% 
+  mutate(group = if_else(COUNTRY == "US", 1, 0)) %>% 
+  # Use March 19th as cutoff (date when all varieties of policy had been enacted)
+  mutate(after = if_else(DATE >= "2020-03-19", 1, 0)) %>% 
+  mutate(treated = after * (group==1))
+```
+
+```{r}
+# Get average REFF both before and after the treatment for both groups
+means <- did %>% 
+  group_by(group, after) %>% 
+  summarize(AvgReff = mean(REFF))
+means
+```
+
+```{r}
+# Control for changes over time and differences in groups
+bef.aft.untreated <- filter(means, after == 1, group == 0)$AvgReff - filter(means, after == 0, group == 0)$AvgReff
+bef.aft.treated <- filter(means, after == 1, group == 1)$AvgReff - filter(means, after == 0, group == 1)$AvgReff
+
+bef.aft.treated
+bef.aft.untreated
+
+# Retrieve DID Estimator by taking out the difference we see in the control group
+bef.aft.treated - bef.aft.untreated
+```
+
+```{r warning=FALSE}
+m1 <- feols(REFF ~ treated | group + after, data = did)
+msummary(m1, stars = TRUE, gof_omit = 'AIC|BIC|Lik|Adj|Pseudo')
+```
+
+### China
+
+```{r}
+# Creates treatment and control groups
+did <- did %>% 
+  mutate(group = if_else(COUNTRY == "China", 1, 0)) %>% 
+  # Use March 19th as cutoff (date when all varieties of policy had been enacted)
+  mutate(after = if_else(DATE >= "2020-02-25", 1, 0)) %>% 
+  mutate(treated = after * (group==1))
+```
+
+```{r}
+# Get average REFF both before and after the treatment for both groups
+means <- did %>% 
+  group_by(group, after) %>% 
+  summarize(AvgReff = mean(REFF))
+means
+```
+
+```{r}
+# Control for changes over time and differences in groups
+bef.aft.untreated <- filter(means, after == 1, group == 0)$AvgReff - filter(means, after == 0, group == 0)$AvgReff
+bef.aft.treated <- filter(means, after == 1, group == 1)$AvgReff - filter(means, after == 0, group == 1)$AvgReff
+
+bef.aft.treated
+bef.aft.untreated
+
+# Retrieve DID Estimator by taking out the difference we see in the control group
+bef.aft.treated - bef.aft.untreated
+```
+
+```{r}
+m2 <- feols(REFF ~ treated | group + after, data = did)
+msummary(m2, stars = TRUE, gof_omit = 'AIC|BIC|Lik|Adj|Pseudo')
+```
+
+### India
+
+```{r}
+# Creates treatment and control groups
+did <- did %>% 
+  mutate(group = if_else(COUNTRY == "India", 1, 0)) %>% 
+  # Use March 19th as cutoff (date when all varieties of policy had been enacted)
+  mutate(after = if_else(DATE >= "2020-03-20", 1, 0)) %>% 
+  mutate(treated = after * (group==1))
+```
+
+```{r}
+# Get average REFF both before and after the treatment for both groups
+means <- did %>% 
+  group_by(group, after) %>% 
+  summarize(AvgReff = mean(REFF))
+means
+```
+
+```{r}
+# Control for changes over time and differences in groups
+bef.aft.untreated <- filter(means, after == 1, group == 0)$AvgReff - filter(means, after == 0, group == 0)$AvgReff
+bef.aft.treated <- filter(means, after == 1, group == 1)$AvgReff - filter(means, after == 0, group == 1)$AvgReff
+
+bef.aft.treated
+bef.aft.untreated
+
+# Retrieve DID Estimator by taking out the difference we see in the control group
+bef.aft.treated - bef.aft.untreated
+```
+
+```{r}
+m3 <- feols(REFF ~ treated | group + after, data = did)
+msummary(m3, stars = TRUE, gof_omit = 'AIC|BIC|Lik|Adj|Pseudo')
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
